@@ -3,7 +3,7 @@
 Docker-контейнер с WireGuard-сервером, через который проходит трафик клиентов,
 и с обходом DPI через
 [zapret-discord-youtube-linux](https://github.com/Sergeydigl3/zapret-discord-youtube-linux)
-(nfqws + стратегии Flowseal). Docker Compose не используется.
+(nfqws + стратегии Flowseal).
 
 ## Как это работает
 
