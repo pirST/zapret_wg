@@ -1,0 +1,13 @@
+[Interface]
+# Адрес сервера внутри WireGuard-сети.
+Address = 10.13.13.1/24
+ListenPort = 51820
+# Сгенерируйте пару командой: wg genkey | tee server.key | wg pubkey
+PrivateKey = REPLACE_WITH_SERVER_PRIVATE_KEY
+MTU = 1420
+
+# Каждый клиент — отдельная секция [Peer].
+# [Peer]
+# PublicKey = REPLACE_WITH_CLIENT_PUBLIC_KEY
+# PresharedKey = REPLACE_WITH_OPTIONAL_PSK
+# AllowedIPs = 10.13.13.2/32

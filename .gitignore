@@ -1,0 +1,4 @@
+config/wg0.conf
+config/*.key
+config/clients/
+.tmp-test/
