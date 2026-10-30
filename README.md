@@ -7,15 +7,6 @@ Docker-контейнер с WireGuard-сервером, через которы
 
 ## Как это работает
 
-```mermaid
-flowchart TD
-    C[WireGuard-клиент] -->|UDP 51820| W[контейнер: wg0]
-    W -->|forward| Q[nftables + NFQUEUE]
-    Q --> Z[nfqws / выбранная стратегия]
-    Z -->|desync и возврат пакета| N[NAT / masquerade]
-    N -->|eth0| I[Интернет]
-```
-
 - Контейнер поднимает WireGuard-сервер (`wg0`) и NAT для клиентов.
 - Адаптер `zapret-discord-youtube-linux` разбирает выбранный `.bat`-файл
   стратегии и запускает `nfqws`.
@@ -57,6 +48,8 @@ NAT: nfqws видит пакет с исходным адресом клиент
 
 ```text
 zapret_wg/
+├── .github/workflows/
+│   └── docker-publish.yml      # сборка и публикация образа в Docker Hub
 ├── Dockerfile
 ├── run.sh
 ├── config/                     # монтируется в контейнер как /opt/config
@@ -107,14 +100,42 @@ zapret_wg/
 
 ## Быстрый старт
 
+### Готовый образ из Docker Hub
+
+Образ публикуется в [`pir888/zapret-wg`](https://hub.docker.com/r/pir888/zapret-wg)
+для `linux/amd64` и `linux/arm64`:
+
+```bash
+docker pull pir888/zapret-wg:latest
+
+mkdir -p config
+
+docker run -d \
+  --name zapret-wg \
+  --restart unless-stopped \
+  --cap-add NET_ADMIN \
+  --cap-add NET_RAW \
+  --sysctl net.ipv4.ip_forward=1 \
+  --sysctl net.netfilter.nf_conntrack_checksum=0 \
+  --sysctl net.netfilter.nf_conntrack_tcp_be_liberal=1 \
+  -p 51820:51820/udp \
+  -v "$PWD/config:/opt/config" \
+  -e ZAPRET_STRATEGY=general_alt9.bat \
+  pir888/zapret-wg:latest
+```
+
+### Локальная сборка
+
 ```bash
 cd zapret_wg
 ./run.sh
 ```
 
 `run.sh` соберёт образ, создаст каталог `config/` и запустит контейнер.
-При первом запуске, если `config/wg0.conf` отсутствует, контейнер сгенерирует
-его автоматически (`WG_AUTOGEN=1`), создаст первого клиента
+
+Готовый образ и локальная сборка ведут себя одинаково: при первом запуске
+контейнер сам сгенерирует `config/wg0.conf`, если его нет (`WG_AUTOGEN=1`),
+и создаст первого клиента
 `config/clients/client1.conf` с настоящими ключами и выведет его в лог полностью:
 
 ```bash
