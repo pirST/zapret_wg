@@ -9,9 +9,10 @@ CONFIG_DIR="${CONFIG_DIR:-$PWD/config}"
 ZAPRET_STRATEGY="${ZAPRET_STRATEGY:-general_alt9.bat}"
 ZAPRET_EXTRA_HOSTS="${ZAPRET_EXTRA_HOSTS:-}"
 WG_LISTEN_PORT="${WG_LISTEN_PORT:-51820}"
+DNS_PORT="${DNS_PORT:-53}"
+DNSPROXY_CONF="${DNSPROXY_CONF:-}"
 WG_CLIENT_NAME="${WG_CLIENT_NAME:-client1}"
 WG_CLIENT_ADDRESS="${WG_CLIENT_ADDRESS:-}"
-WG_CLIENT_DNS="${WG_CLIENT_DNS-1.1.1.1}"
 WG_CLIENT_ENDPOINT="${WG_CLIENT_ENDPOINT:-}"
 
 mkdir -p "$CONFIG_DIR"
@@ -21,32 +22,53 @@ if docker container inspect "$NAME" >/dev/null 2>&1; then
     exit 1
 fi
 
-docker build -t "$IMAGE" .
+# DNSPROXY_CACHE_BUST forces the dnsproxy download layer to re-run on every
+# build so the latest release is picked up.
+docker build \
+    --build-arg "DNSPROXY_CACHE_BUST=$(date +%s)" \
+    -t "$IMAGE" .
 
-docker run -d \
-    --name "$NAME" \
-    --restart unless-stopped \
-    --cap-add NET_ADMIN \
-    --cap-add NET_RAW \
-    --sysctl net.ipv4.ip_forward=1 \
-    --sysctl net.netfilter.nf_conntrack_checksum=0 \
-    --sysctl net.netfilter.nf_conntrack_tcp_be_liberal=1 \
-    -p "${WG_LISTEN_PORT}:${WG_LISTEN_PORT}/udp" \
-    -v "${CONFIG_DIR}:/opt/config" \
-    -e "ZAPRET_STRATEGY=${ZAPRET_STRATEGY}" \
-    -e "ZAPRET_EXTRA_HOSTS=${ZAPRET_EXTRA_HOSTS}" \
-    -e "WG_LISTEN_PORT=${WG_LISTEN_PORT}" \
-    -e "WG_CLIENT_NAME=${WG_CLIENT_NAME}" \
-    -e "WG_CLIENT_ADDRESS=${WG_CLIENT_ADDRESS}" \
-    -e "WG_CLIENT_DNS=${WG_CLIENT_DNS}" \
-    -e "WG_CLIENT_ENDPOINT=${WG_CLIENT_ENDPOINT}" \
-    "$IMAGE"
+docker_args=(
+    -d
+    --name "$NAME"
+    --restart unless-stopped
+    --cap-add NET_ADMIN
+    --cap-add NET_RAW
+    --sysctl net.ipv4.ip_forward=1
+    --sysctl net.netfilter.nf_conntrack_checksum=0
+    --sysctl net.netfilter.nf_conntrack_tcp_be_liberal=1
+    -p "${WG_LISTEN_PORT}:${WG_LISTEN_PORT}/udp"
+    -v "${CONFIG_DIR}:/opt/config"
+    -e "ZAPRET_STRATEGY=${ZAPRET_STRATEGY}"
+    -e "ZAPRET_EXTRA_HOSTS=${ZAPRET_EXTRA_HOSTS}"
+    -e "DNSPROXY_CONF=${DNSPROXY_CONF}"
+    -e "WG_LISTEN_PORT=${WG_LISTEN_PORT}"
+    -e "WG_CLIENT_NAME=${WG_CLIENT_NAME}"
+    -e "WG_CLIENT_ADDRESS=${WG_CLIENT_ADDRESS}"
+    -e "WG_CLIENT_ENDPOINT=${WG_CLIENT_ENDPOINT}"
+)
+
+if [ -n "$DNSPROXY_CONF" ]; then
+    docker_args+=(-p "${DNS_PORT}:53/udp")
+fi
+
+# Do not pass WG_CLIENT_DNS when it is unset: genconfig.sh then picks the
+# dnsproxy address (or 1.1.1.1) automatically.  An explicitly empty value
+# selects the public 1.1.1.1 fallback.
+if [ -n "${WG_CLIENT_DNS+x}" ]; then
+    docker_args+=(-e "WG_CLIENT_DNS=${WG_CLIENT_DNS}")
+fi
+
+docker run "${docker_args[@]}" "$IMAGE"
 
 echo
 echo "Container '$NAME' started."
 echo "Logs:              docker logs -f $NAME"
 echo "Shell:             docker exec -it $NAME bash"
 echo "Server public key: docker exec $NAME wg show wg0 public-key"
+if [ -n "$DNSPROXY_CONF" ]; then
+    echo "DNS on host:       dig @127.0.0.1 -p $DNS_PORT example.com"
+fi
 echo
 
 # Give the container a moment to generate keys and start WireGuard.

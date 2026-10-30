@@ -18,34 +18,13 @@ export WG_INTERFACE="${WG_INTERFACE:-wg0}"
 export WG_AUTOGEN="${WG_AUTOGEN:-1}"
 export ZAPRET_STRATEGY="${ZAPRET_STRATEGY:-general_alt9.bat}"
 export ZAPRET_EXTRA_HOSTS="${ZAPRET_EXTRA_HOSTS:-}"
+export DNSPROXY_CONF="${DNSPROXY_CONF:-}"
 
 mkdir -p "$RUNTIME_DIR" "$(dirname "$WG_CONFIG")"
-rm -f "$MAINTENANCE_FILE" "$RUNTIME_DIR/runner.pid" "$RUNTIME_DIR/nfqws.pid"
-
-if [ ! -s "$WG_CONFIG" ]; then
-    if [ "$WG_AUTOGEN" = "1" ]; then
-        log "WireGuard config not found, generating a new one: $WG_CONFIG"
-        "$SCRIPT_DIR/genconfig.sh" "$WG_CONFIG"
-    else
-        die "WireGuard config not found: $WG_CONFIG (set WG_AUTOGEN=1 to generate one)"
-    fi
-fi
-
-WAN_IFACE="$(detect_wan_iface)"
-export WAN_IFACE
-log "WAN interface: $WAN_IFACE"
-
-setup_forwarding
-setup_wireguard "$WG_CONFIG" "$WG_INTERFACE"
-
-WG_LISTEN_PORT="$(wg show "$WG_INTERFACE" listen-port 2>/dev/null || true)"
-export WG_LISTEN_PORT
-[ -n "$WG_LISTEN_PORT" ] || warn "Could not determine the WireGuard listen port"
-
-setup_nat "$WAN_IFACE"
-setup_mss_clamp
+rm -f "$MAINTENANCE_FILE" "$RUNTIME_DIR/runner.pid" "$RUNTIME_DIR/nfqws.pid" "$RUNTIME_DIR/dnsproxy.pid"
 
 zapret_pid=""
+dnsproxy_pid=""
 restart_requested=0
 shutdown_requested=0
 
@@ -53,6 +32,9 @@ on_term() {
     shutdown_requested=1
     if [ -n "$zapret_pid" ] && kill -0 "$zapret_pid" 2>/dev/null; then
         kill -TERM "$zapret_pid" 2>/dev/null || true
+    fi
+    if [ -n "$dnsproxy_pid" ] && kill -0 "$dnsproxy_pid" 2>/dev/null; then
+        kill -TERM "$dnsproxy_pid" 2>/dev/null || true
     fi
 }
 
@@ -84,6 +66,52 @@ wait_for_runner() {
 
 trap on_term TERM INT
 trap on_usr1 USR1
+
+# Start dnsproxy before generating client configs: genconfig.sh uses its
+# real state to decide whether clients get the dnsproxy IP or the container
+# resolver.
+if dnsproxy_enabled; then
+    log "Starting DNS proxy..."
+    "$SCRIPT_DIR/dnsproxy.sh" &
+    dnsproxy_pid=$!
+
+    for _ in $(seq 1 20); do
+        dnsproxy_running && break
+        kill -0 "$dnsproxy_pid" 2>/dev/null || break
+        sleep 0.1
+    done
+
+    if dnsproxy_running; then
+        log "dnsproxy is running"
+    else
+        warn "dnsproxy is not running; WireGuard client DNS will use the container resolver"
+    fi
+else
+    log "DNSPROXY_CONF is empty, DNS proxy disabled"
+fi
+
+if [ ! -s "$WG_CONFIG" ]; then
+    if [ "$WG_AUTOGEN" = "1" ]; then
+        log "WireGuard config not found, generating a new one: $WG_CONFIG"
+        "$SCRIPT_DIR/genconfig.sh" "$WG_CONFIG"
+    else
+        die "WireGuard config not found: $WG_CONFIG (set WG_AUTOGEN=1 to generate one)"
+    fi
+fi
+
+WAN_IFACE="$(detect_wan_iface)"
+export WAN_IFACE
+log "WAN interface: $WAN_IFACE"
+
+setup_forwarding
+setup_wireguard "$WG_CONFIG" "$WG_INTERFACE"
+
+WG_LISTEN_PORT="$(wg show "$WG_INTERFACE" listen-port 2>/dev/null || true)"
+export WG_LISTEN_PORT
+[ -n "$WG_LISTEN_PORT" ] || warn "Could not determine the WireGuard listen port"
+
+setup_nat "$WAN_IFACE"
+setup_mss_clamp
 
 while :; do
     while [ -e "$MAINTENANCE_FILE" ] && [ "$shutdown_requested" -eq 0 ]; do
@@ -133,8 +161,15 @@ if [ -n "$zapret_pid" ] && kill -0 "$zapret_pid" 2>/dev/null; then
     wait "$zapret_pid" 2>/dev/null || true
 fi
 
+log "Stopping dnsproxy..."
+if [ -n "$dnsproxy_pid" ] && kill -0 "$dnsproxy_pid" 2>/dev/null; then
+    kill -TERM "$dnsproxy_pid" 2>/dev/null || true
+    wait "$dnsproxy_pid" 2>/dev/null || true
+fi
+
+dnsproxy_pid=""
 cleanup_network
 wg_interface_delete "$WG_INTERFACE"
-rm -f "$RUNTIME_DIR/runner.pid" "$RUNTIME_DIR/nfqws.pid" "$MAINTENANCE_FILE"
+rm -f "$RUNTIME_DIR/runner.pid" "$RUNTIME_DIR/nfqws.pid" "$RUNTIME_DIR/dnsproxy.pid" "$MAINTENANCE_FILE"
 
 log "Stopped"

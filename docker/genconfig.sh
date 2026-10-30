@@ -12,7 +12,20 @@ ADDRESS="${WG_SERVER_ADDRESS:-10.13.13.1/24}"
 PORT="${WG_LISTEN_PORT:-51820}"
 MTU="${WG_MTU:-1420}"
 CLIENT_NAME="${WG_CLIENT_NAME:-client1}"
-CLIENT_DNS="${WG_CLIENT_DNS-1.1.1.1}"
+
+# Client DNS:
+#   * non-empty WG_CLIENT_DNS wins;
+#   * explicitly empty WG_CLIENT_DNS -> public fallback (1.1.1.1);
+#   * unset -> dnsproxy address if it is running, otherwise 1.1.1.1.
+if [ -n "${WG_CLIENT_DNS:-}" ]; then
+    CLIENT_DNS="$WG_CLIENT_DNS"
+elif [ -n "${WG_CLIENT_DNS+x}" ]; then
+    CLIENT_DNS="1.1.1.1"
+elif dnsproxy_running; then
+    CLIENT_DNS="$(dnsproxy_client_ip "${ADDRESS%%/*}")"
+else
+    CLIENT_DNS="1.1.1.1"
+fi
 
 # Derive the first client address from the server address (10.13.13.1 ->
 # 10.13.13.2). Fall back to the default subnet for unusual addresses.

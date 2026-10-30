@@ -48,12 +48,27 @@ parse_bat_file "$strategy_path"
 [ -n "${udp_ports:-}" ] || die "Strategy $strategy does not define UDP ports"
 
 # ---------------------------------------------------------------------------
-# ZAPRET_EXTRA_HOSTS: add custom domains to every hostlist-based filter.
+# Extra hostlist/ipset: ZAPRET_EXTRA_HOSTS (domains and IP/CIDR) plus
+# dnsproxy DoH upstreams.  DoH hostnames must be in a hostlist, otherwise
+# nfqws passes their TLS handshakes through untouched and zapret does not
+# bypass DPI for DNS.
 # ---------------------------------------------------------------------------
 EXTRA_HOSTS_FILE="$REPO_DIR/lists/list-zapret-wg-extra.txt"
+EXTRA_IPSET_FILE="$REPO_DIR/lists/ipset-zapret-wg-extra.txt"
 mkdir -p "$REPO_DIR/lists"
-normalize_extra_hosts > "$EXTRA_HOSTS_FILE"
+write_dnsproxy_hosts
+{
+    normalize_extra_domains
+    if [ -s "$RUNTIME_DIR/dnsproxy-hosts.txt" ]; then
+        cat "$RUNTIME_DIR/dnsproxy-hosts.txt"
+    fi
+} | sed '/^[[:space:]]*$/d' | sort -u > "$EXTRA_HOSTS_FILE"
 chmod 644 "$EXTRA_HOSTS_FILE"
+
+normalize_extra_ips \
+    | sed '/^[[:space:]]*$/d' \
+    | sort -u > "$EXTRA_IPSET_FILE"
+chmod 644 "$EXTRA_IPSET_FILE"
 
 EXTRA_HOSTS_APPLIED=0
 
@@ -81,12 +96,22 @@ inject_extra_hostlist() {
 
 if [ -s "$EXTRA_HOSTS_FILE" ]; then
     inject_extra_hostlist "$EXTRA_HOSTS_FILE"
-    log "ZAPRET_EXTRA_HOSTS: $(wc -l < "$EXTRA_HOSTS_FILE") domain(s), applied to $EXTRA_HOSTS_APPLIED general profile(s)"
+    log "Extra hostlist: $(wc -l < "$EXTRA_HOSTS_FILE") domain(s), applied to $EXTRA_HOSTS_APPLIED general profile(s)"
     if [ "$EXTRA_HOSTS_APPLIED" -eq 0 ]; then
-        warn "Strategy $strategy has no general hostlist profile; ZAPRET_EXTRA_HOSTS has no effect"
+        warn "Strategy $strategy has no general hostlist profile; ZAPRET_EXTRA_HOSTS and dnsproxy DoH hosts have no effect"
     fi
 else
     rm -f "$EXTRA_HOSTS_FILE"
+fi
+
+if [ -s "$EXTRA_IPSET_FILE" ]; then
+    inject_extra_ipset "$EXTRA_IPSET_FILE"
+    log "Extra ipset: $(wc -l < "$EXTRA_IPSET_FILE") IP/CIDR(s), applied as $EXTRA_IPSET_APPLIED separate IP profile(s)"
+    if [ "$EXTRA_IPSET_APPLIED" -eq 0 ]; then
+        warn "Strategy $strategy has no general hostlist profile; IP/CIDR entries in ZAPRET_EXTRA_HOSTS have no effect"
+    fi
+else
+    rm -f "$EXTRA_IPSET_FILE"
 fi
 
 # ---------------------------------------------------------------------------
