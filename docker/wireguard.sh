@@ -97,20 +97,37 @@ setup_wireguard() {
     log "WireGuard $iface is up (MTU $mtu, listen port $(wg show "$iface" listen-port))"
 }
 
+# /proc/sys is mounted read-only inside containers, so `sysctl -w` always
+# fails there.  Values requested with `docker run --sysctl` are already
+# applied in the container network namespace, so verify the effective value
+# first and warn only when it is actually wrong.  The write is still attempted
+# as a best effort for privileged manual runs where /proc/sys is writable.
+ensure_sysctl() {
+    local key="$1" want="$2" have
+
+    have=$(sysctl -n "$key" 2>/dev/null) || have=""
+    [ "$have" = "$want" ] && return 0
+
+    sysctl -qw "$key=$want" 2>/dev/null || true
+
+    have=$(sysctl -n "$key" 2>/dev/null) || have=""
+    [ "$have" = "$want" ]
+}
+
 setup_forwarding() {
-    sysctl -qw net.ipv4.ip_forward=1 2>/dev/null \
-        || warn "Could not enable IPv4 forwarding inside the container; run with --sysctl net.ipv4.ip_forward=1"
-    sysctl -qw net.ipv6.conf.all.forwarding=1 2>/dev/null || true
+    ensure_sysctl net.ipv4.ip_forward 1 \
+        || warn "IPv4 forwarding is disabled; run the container with --sysctl net.ipv4.ip_forward=1"
+    ensure_sysctl net.ipv6.conf.all.forwarding 1 || true
 
     # Router mode: nfqws fake packets with bad checksums must survive NAT.
     # Recommended by the zapret documentation for router installations.
-    sysctl -qw net.netfilter.nf_conntrack_checksum=0 2>/dev/null \
-        || warn "Could not disable nf_conntrack checksum validation; badsum-based strategies may not work through NAT"
+    ensure_sysctl net.netfilter.nf_conntrack_checksum 0 \
+        || warn "nf_conntrack checksum validation is enabled; badsum-based strategies may not work through NAT. Run the container with --sysctl net.netfilter.nf_conntrack_checksum=0"
 
     # Accept out-of-window TCP packets (badseq fooling) instead of marking
     # them INVALID and dropping/not translating them in NAT.
-    sysctl -qw net.netfilter.nf_conntrack_tcp_be_liberal=1 2>/dev/null \
-        || warn "Could not enable liberal TCP conntrack; badseq-based strategies may be affected by NAT"
+    ensure_sysctl net.netfilter.nf_conntrack_tcp_be_liberal 1 \
+        || warn "nf_conntrack liberal TCP mode is disabled; badseq-based strategies may be affected by NAT. Run the container with --sysctl net.netfilter.nf_conntrack_tcp_be_liberal=1"
 }
 
 setup_nat() {
