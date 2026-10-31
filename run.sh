@@ -8,7 +8,6 @@ NAME="${NAME:-zapret-wg}"
 CONFIG_DIR="${CONFIG_DIR:-$PWD/config}"
 ZAPRET_STRATEGY="${ZAPRET_STRATEGY:-general_alt9.bat}"
 ZAPRET_EXTRA_HOSTS="${ZAPRET_EXTRA_HOSTS:-}"
-WG_LISTEN_PORT="${WG_LISTEN_PORT:-51820}"
 DNS_PORT="${DNS_PORT:-53}"
 DNSPROXY_CONF="${DNSPROXY_CONF:-}"
 WG_CLIENT_NAME="${WG_CLIENT_NAME:-client1}"
@@ -37,12 +36,11 @@ docker_args=(
     --sysctl net.ipv4.ip_forward=1
     --sysctl net.netfilter.nf_conntrack_checksum=0
     --sysctl net.netfilter.nf_conntrack_tcp_be_liberal=1
-    -p "${WG_LISTEN_PORT}:${WG_LISTEN_PORT}/udp"
+    -p "51820:51820/udp"
     -v "${CONFIG_DIR}:/opt/config"
     -e "ZAPRET_STRATEGY=${ZAPRET_STRATEGY}"
     -e "ZAPRET_EXTRA_HOSTS=${ZAPRET_EXTRA_HOSTS}"
     -e "DNSPROXY_CONF=${DNSPROXY_CONF}"
-    -e "WG_LISTEN_PORT=${WG_LISTEN_PORT}"
     -e "WG_CLIENT_NAME=${WG_CLIENT_NAME}"
     -e "WG_CLIENT_ADDRESS=${WG_CLIENT_ADDRESS}"
     -e "WG_CLIENT_ENDPOINT=${WG_CLIENT_ENDPOINT}"

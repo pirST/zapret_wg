@@ -8,17 +8,14 @@ ARG DNSPROXY_VERSION=latest
 # resolved again instead of reusing an old cached layer.
 ARG DNSPROXY_CACHE_BUST=""
 
+# Runtime configuration for the optional DNS proxy.  The value is a single
+# string of dnsproxy command-line flags.  An empty value disables dnsproxy.
 ENV LANG=C.UTF-8 \
-    ADAPTER_DIR=/opt/zapret-discord-youtube-linux \
     ZAPRET_STRATEGY=general_alt9.bat \
     ZAPRET_EXTRA_HOSTS="" \
-    WG_CONFIG=/opt/config/wg0.conf \
-    WG_INTERFACE=wg0 \
+    DNSPROXY_CONF="" \
     WG_AUTOGEN=1 \
-    WG_SERVER_ADDRESS=10.13.13.1/24 \
-    WG_LISTEN_PORT=51820 \
-    WG_MTU=1420 \
-    WAN_IFACE=""
+    WG_MTU=1420
 
 # Base shell utilities and all runtime dependencies.
 # Dependencies are grouped by purpose, programs live in standard system paths.
@@ -57,12 +54,12 @@ RUN apt-get update \
 
 # Dependency 1: zapret-discord-youtube adapter.
 # Dependency 2: nfqws binary + Flowseal strategies, downloaded by the adapter
-# into $ADAPTER_DIR/nfqws and $ADAPTER_DIR/zapret-latest.
-RUN git clone --depth 1 "$ADAPTER_REPO" "$ADAPTER_DIR" \
-    && cd "$ADAPTER_DIR" \
+# into /opt/zapret-discord-youtube-linux/nfqws and .../zapret-latest.
+RUN git clone --depth 1 "$ADAPTER_REPO" /opt/zapret-discord-youtube-linux \
+    && cd /opt/zapret-discord-youtube-linux \
     && ./service.sh download-deps --default \
-    && test -x "$ADAPTER_DIR/nfqws" \
-    && test -d "$ADAPTER_DIR/zapret-latest/lists"
+    && test -x /opt/zapret-discord-youtube-linux/nfqws \
+    && test -d /opt/zapret-discord-youtube-linux/zapret-latest/lists
 
 # Dependency 3: AdGuard dnsproxy. It receives plain DNS from WireGuard clients
 # and forwards it over DoH through the WAN interface, where zapret desyncs it.

@@ -11,7 +11,8 @@ source "$SCRIPT_DIR/lib.sh"
 # ---------------------------------------------------------------------------
 [ -d "$REPO_DIR" ] || die "Strategies directory not found: $REPO_DIR (re-run zapret-wg-update or rebuild the image)"
 [ -x "$NFQWS_PATH" ] || die "nfqws not found: $NFQWS_PATH (re-run zapret-wg-update or rebuild the image)"
-[ -n "${WAN_IFACE:-}" ] || die "WAN_IFACE is not set"
+
+wan_iface="$(detect_wan_iface)"
 
 export BASE_DIR="$ADAPTER_DIR"
 export REPO_DIR CUSTOM_STRATEGIES_DIR NFQWS_PATH
@@ -190,12 +191,14 @@ add_wg_queue_exclusion() {
     log "WireGuard UDP port $port is excluded from NFQUEUE"
 }
 
-log "Applying nftables rules on WAN interface: $WAN_IFACE"
+log "Applying nftables rules on WAN interface: $wan_iface"
 
 pkill -x nfqws 2>/dev/null || true
 
-firewall_setup "$tcp_ports" "$udp_ports" "$WAN_IFACE"
-add_wg_queue_exclusion "${WG_LISTEN_PORT:-}"
+firewall_setup "$tcp_ports" "$udp_ports" "$wan_iface"
+wg_listen_port="$(wg show wg0 listen-port 2>/dev/null || true)"
+[ -n "$wg_listen_port" ] || warn "Could not determine the WireGuard listen port"
+add_wg_queue_exclusion "$wg_listen_port"
 
 log "Starting nfqws..."
 "${NFQWS_ARGS[@]}" &

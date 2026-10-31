@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-IFACE="${WG_INTERFACE:-wg0}"
+IFACE="wg0"
 
 ip link show "$IFACE" >/dev/null 2>&1 || exit 1
 wg show "$IFACE" >/dev/null 2>&1 || exit 1

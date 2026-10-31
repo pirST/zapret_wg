@@ -6,10 +6,10 @@ SCRIPT_DIR="$(dirname -- "$SCRIPT_PATH")"
 # shellcheck source=docker/lib.sh
 source "$SCRIPT_DIR/lib.sh"
 
-CONFIG="${1:-${WG_CONFIG:-/opt/config/wg0.conf}}"
+CONFIG="${1:-/opt/config/wg0.conf}"
 CONFIG_DIR="$(dirname "$CONFIG")"
-ADDRESS="${WG_SERVER_ADDRESS:-10.13.13.1/24}"
-PORT="${WG_LISTEN_PORT:-51820}"
+ADDRESS="10.13.13.1/24"
+PORT="51820"
 MTU="${WG_MTU:-1420}"
 CLIENT_NAME="${WG_CLIENT_NAME:-client1}"
 

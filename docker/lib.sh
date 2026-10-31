@@ -22,19 +22,12 @@ die() {
 }
 
 detect_wan_iface() {
-    local iface="${WAN_IFACE:-}"
-
-    if [ -n "$iface" ] && [ "$iface" != "auto" ]; then
-        ip link show "$iface" >/dev/null 2>&1 \
-            || die "WAN interface '$iface' does not exist (check WAN_IFACE)"
-        printf '%s\n' "$iface"
-        return 0
-    fi
+    local iface
 
     iface=$(ip -4 route show default 2>/dev/null \
         | awk '{for (i = 1; i <= NF; i++) if ($i == "dev") {print $(i + 1); exit}}')
 
-    [ -n "$iface" ] || die "Cannot detect the WAN interface (no default route). Set WAN_IFACE."
+    [ -n "$iface" ] || die "Cannot detect the WAN interface (no default route)."
     printf '%s\n' "$iface"
 }
 

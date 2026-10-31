@@ -13,14 +13,12 @@ if [ "$#" -gt 0 ]; then
     exec "$@"
 fi
 
-export WG_CONFIG="${WG_CONFIG:-/opt/config/wg0.conf}"
-export WG_INTERFACE="${WG_INTERFACE:-wg0}"
 export WG_AUTOGEN="${WG_AUTOGEN:-1}"
 export ZAPRET_STRATEGY="${ZAPRET_STRATEGY:-general_alt9.bat}"
 export ZAPRET_EXTRA_HOSTS="${ZAPRET_EXTRA_HOSTS:-}"
 export DNSPROXY_CONF="${DNSPROXY_CONF:-}"
 
-mkdir -p "$RUNTIME_DIR" "$(dirname "$WG_CONFIG")"
+mkdir -p "$RUNTIME_DIR" /opt/config
 rm -f "$MAINTENANCE_FILE" "$RUNTIME_DIR/runner.pid" "$RUNTIME_DIR/nfqws.pid" "$RUNTIME_DIR/dnsproxy.pid"
 
 zapret_pid=""
@@ -90,27 +88,22 @@ else
     log "DNSPROXY_CONF is empty, DNS proxy disabled"
 fi
 
-if [ ! -s "$WG_CONFIG" ]; then
+if [ ! -s /opt/config/wg0.conf ]; then
     if [ "$WG_AUTOGEN" = "1" ]; then
-        log "WireGuard config not found, generating a new one: $WG_CONFIG"
-        "$SCRIPT_DIR/genconfig.sh" "$WG_CONFIG"
+        log "WireGuard config not found, generating a new one: /opt/config/wg0.conf"
+        "$SCRIPT_DIR/genconfig.sh" /opt/config/wg0.conf
     else
-        die "WireGuard config not found: $WG_CONFIG (set WG_AUTOGEN=1 to generate one)"
+        die "WireGuard config not found: /opt/config/wg0.conf (set WG_AUTOGEN=1 to generate one)"
     fi
 fi
 
-WAN_IFACE="$(detect_wan_iface)"
-export WAN_IFACE
-log "WAN interface: $WAN_IFACE"
+wan_iface="$(detect_wan_iface)"
+log "WAN interface: $wan_iface"
 
 setup_forwarding
-setup_wireguard "$WG_CONFIG" "$WG_INTERFACE"
+setup_wireguard /opt/config/wg0.conf wg0
 
-WG_LISTEN_PORT="$(wg show "$WG_INTERFACE" listen-port 2>/dev/null || true)"
-export WG_LISTEN_PORT
-[ -n "$WG_LISTEN_PORT" ] || warn "Could not determine the WireGuard listen port"
-
-setup_nat "$WAN_IFACE"
+setup_nat "$wan_iface"
 setup_mss_clamp
 
 while :; do
@@ -169,7 +162,7 @@ fi
 
 dnsproxy_pid=""
 cleanup_network
-wg_interface_delete "$WG_INTERFACE"
+wg_interface_delete wg0
 rm -f "$RUNTIME_DIR/runner.pid" "$RUNTIME_DIR/nfqws.pid" "$RUNTIME_DIR/dnsproxy.pid" "$MAINTENANCE_FILE"
 
 log "Stopped"
