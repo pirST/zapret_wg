@@ -111,9 +111,6 @@ chmod 600 "$CLIENT_CONFIG"
 printf '\nWireGuard config created: %s\n' "$CONFIG"
 printf 'Client config created:    %s\n\n' "$CLIENT_CONFIG"
 printf 'Server public key:\n  %s\n\n' "$public_key"
-printf 'Client config (%s):\n' "$CLIENT_NAME"
-cat "$CLIENT_CONFIG"
-printf '\n'
 case "$CLIENT_ENDPOINT" in
     *'<'*)
         printf 'Replace <SERVER_PUBLIC_IP> with the public IP or domain of this server,\n'

@@ -62,6 +62,25 @@ wait_for_runner() {
     done
 }
 
+# Print existing client configs on every start so that they are always
+# available in `docker logs` without exec'ing into the container.
+print_client_configs() {
+    local conf
+    local -a configs=()
+
+    for conf in /opt/config/clients/*.conf; do
+        if [ -s "$conf" ]; then
+            configs+=("$conf")
+        fi
+    done
+
+    for conf in "${configs[@]}"; do
+        log "Client config ($(basename "${conf%.conf}")):"
+        cat "$conf"
+        printf '\n'
+    done
+}
+
 trap on_term TERM INT
 trap on_usr1 USR1
 
@@ -102,6 +121,7 @@ log "WAN interface: $wan_iface"
 
 setup_forwarding
 setup_wireguard /opt/config/wg0.conf wg0
+print_client_configs
 
 setup_nat "$wan_iface"
 setup_mss_clamp
