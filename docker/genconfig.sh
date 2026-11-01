@@ -8,10 +8,17 @@ source "$SCRIPT_DIR/lib.sh"
 
 CONFIG="${1:-/opt/config/wg0.conf}"
 CONFIG_DIR="$(dirname "$CONFIG")"
-ADDRESS="10.13.13.1/24"
 PORT="51820"
 MTU="${WG_MTU:-1420}"
 CLIENT_NAME="${WG_CLIENT_NAME:-client1}"
+
+# Pick a random /24 from 10.13.1.0/24..10.13.254.0/24 so that several
+# containers started with default settings do not share client addresses.
+random_server_address() {
+    printf '10.13.%d.1/24\n' "$((RANDOM % 254 + 1))"
+}
+
+ADDRESS="${WG_SERVER_ADDRESS:-$(random_server_address)}"
 
 # Client DNS:
 #   * non-empty WG_CLIENT_DNS wins;

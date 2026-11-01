@@ -15,6 +15,7 @@ ENV LANG=C.UTF-8 \
     ZAPRET_EXTRA_HOSTS="" \
     DNSPROXY_CONF="" \
     WG_AUTOGEN=1 \
+    WG_SERVER_ADDRESS="" \
     WG_MTU=1420
 
 # Base shell utilities and all runtime dependencies.
